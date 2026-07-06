@@ -1,0 +1,57 @@
+# NMI Payments widget — bug reproductions
+
+A minimal React app that reproduces two issues in
+[`@nmipayments/nmi-pay-react`](https://www.npmjs.com/package/@nmipayments/nmi-pay-react)
+(the `NmiPayments` and `NmiThreeDSecure` components).
+
+## Setup
+
+```bash
+cp .env.example .env.local     # then set VITE_NMI_TOKENIZATION_KEY
+npm install
+npm run dev
+```
+
+`VITE_NMI_TOKENIZATION_KEY` is a public (client-side) tokenization key.
+
+## Bug 1 — 3D Secure auth failure is never surfaced; widget stuck loading
+
+Using the test card **`4000 0000 0000 2537`**, running 3D Secure
+(`NmiThreeDSecure` → `startThreeDSecure`) fails authentication. Gateway.js logs
+the failure to the console:
+
+```
+ThreeDSecureUI: Payer Authentication Error - Blocked due to Failed Authentication rule REFID: 85085966
+```
+
+However, **`NmiThreeDSecure`'s `onFailure` callback is never called** (nor
+`onComplete` / `onChallenge`). The integrating app receives no signal, so the
+widget remains **stuck in a loading state** indefinitely.
+
+**Reproduce:**
+1. Enter card `4000 0000 0000 2537` with any valid future expiry and CVV.
+2. Click **Pay** (this calls `startThreeDSecure` with the tokenized card).
+3. Observe: the Gateway.js error above is logged to the console, the 3DS UI
+   stays in its loading state, and none of `onComplete` / `onFailure` /
+   `onChallenge` fire.
+
+---
+---
+
+## Bug 2 — Payment fields intermittently hang on the loading spinner
+
+`NmiPayments` mounts three hosted-field iframes (`ccnumber`, `ccexp`, `cvv`)
+from `secure.nmi.com/token/inline.php`. The widget hides its loading spinner and
+fires `onFieldsAvailable` **only after all three iframes have posted a `resize`
+message**.
+
+Intermittently (~1 in 30 page loads) **one iframe never posts its `resize`
+message**. Because there is no timeout or fallback, the widget stays on the
+spinner forever and `onFieldsAvailable` is never called.
+
+**Reproduce:** load the app and reload repeatedly (~10×). The app listens for
+the iframes' `resize` messages and reports which fields signaled; on a hung load
+it shows e.g. `HANG REPRODUCED — missing: [ccnumber]`, and `onFieldsAvailable`
+never fires.
+
+---

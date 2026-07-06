@@ -4,15 +4,12 @@ A minimal React app that reproduces two issues in
 [`@nmipayments/nmi-pay-react`](https://www.npmjs.com/package/@nmipayments/nmi-pay-react)
 (the `NmiPayments` and `NmiThreeDSecure` components).
 
-## Setup
+## Try it
 
-```bash
-cp .env.example .env.local     # then set VITE_NMI_TOKENIZATION_KEY
-npm install
-npm run dev
-```
+**Demo app: https://nmi-test-131643827145.us-central1.run.app**
 
-`VITE_NMI_TOKENIZATION_KEY` is a public (client-side) tokenization key.
+No setup needed — open the link and follow the reproduction steps below. To run
+it locally instead, see [Running locally](#running-locally) at the end.
 
 ## Bug 1 — 3D Secure auth failure is never surfaced; widget stuck loading
 
@@ -55,3 +52,13 @@ it shows e.g. `HANG REPRODUCED — missing: [ccnumber]`, and `onFieldsAvailable`
 never fires.
 
 ---
+
+## Running locally
+
+```bash
+cp .env.example .env.local     # then set VITE_NMI_TOKENIZATION_KEY
+npm install
+npm run dev
+```
+
+`VITE_NMI_TOKENIZATION_KEY` is a public (client-side) tokenization key.

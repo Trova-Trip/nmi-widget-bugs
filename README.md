@@ -11,7 +11,29 @@ A minimal React app that reproduces two issues in
 No setup needed — open the link and follow the reproduction steps below. To run
 it locally instead, see [Running locally](#running-locally) at the end.
 
-## Bug 1 — 3D Secure auth failure is never surfaced; widget stuck loading
+## Bug 1 — Payment fields intermittently hang on the loading spinner
+
+`NmiPayments` mounts three hosted-field iframes (`ccnumber`, `ccexp`, `cvv`)
+from `secure.nmi.com/token/inline.php`. The widget hides its loading spinner and
+fires `onFieldsAvailable` **only after all three iframes have posted a `resize`
+message**.
+
+Intermittently, **one iframe never posts its `resize` message**. Because there
+is no timeout or fallback, the widget stays on the spinner forever and
+`onFieldsAvailable` is never called.
+
+**Reproduce:**
+1. Click **🔁 Auto-retry until hang**. The app reloads itself on every
+   successful load and keeps going until a hang reproduces.
+2. Wait — it stops automatically the moment it catches a hung load, leaving that
+   load on screen. The app listens for the iframes' `resize` messages and
+   reports which fields signaled; on a hung load it shows e.g. `HANG
+   REPRODUCED — missing: [ccnumber]`, and `onFieldsAvailable` never fires.
+
+---
+---
+
+## Bug 2 — 3D Secure auth failure is never surfaced; widget stuck loading
 
 Using the test card **`4000 0000 0000 2537`**, running 3D Secure
 (`NmiThreeDSecure` → `startThreeDSecure`) fails authentication. Gateway.js logs
@@ -31,25 +53,6 @@ widget remains **stuck in a loading state** indefinitely.
 3. Observe: the Gateway.js error above is logged to the console, the 3DS UI
    stays in its loading state, and none of `onComplete` / `onFailure` /
    `onChallenge` fire.
-
----
----
-
-## Bug 2 — Payment fields intermittently hang on the loading spinner
-
-`NmiPayments` mounts three hosted-field iframes (`ccnumber`, `ccexp`, `cvv`)
-from `secure.nmi.com/token/inline.php`. The widget hides its loading spinner and
-fires `onFieldsAvailable` **only after all three iframes have posted a `resize`
-message**.
-
-Intermittently (~1 in 30 page loads) **one iframe never posts its `resize`
-message**. Because there is no timeout or fallback, the widget stays on the
-spinner forever and `onFieldsAvailable` is never called.
-
-**Reproduce:** load the app and reload repeatedly (~10×). The app listens for
-the iframes' `resize` messages and reports which fields signaled; on a hung load
-it shows e.g. `HANG REPRODUCED — missing: [ccnumber]`, and `onFieldsAvailable`
-never fires.
 
 ---
 

@@ -8,9 +8,6 @@ A minimal React app that reproduces two issues in
 
 **Demo app: https://nmi-test-131643827145.us-central1.run.app**
 
-No setup needed — open the link and follow the reproduction steps below. To run
-it locally instead, see [Running locally](#running-locally) at the end.
-
 ## Bug 1 — Payment fields intermittently hang on the loading spinner
 
 `NmiPayments` mounts three hosted-field iframes (`ccnumber`, `ccexp`, `cvv`)
@@ -53,6 +50,28 @@ widget remains **stuck in a loading state** indefinitely.
 3. Observe: the Gateway.js error above is logged to the console, the 3DS UI
    stays in its loading state, and none of `onComplete` / `onFailure` /
    `onChallenge` fire.
+
+**The event that *is* emitted:** even though no callback fires, Gateway.js does
+post the failure as a `message` event on `window` — the vendor just never turns
+it into an `onFailure` call. Captured payload (`origin:
+https://secure.networkmerchants.com`):
+
+```jsonc
+{
+  "action": "_gatewayJsInternal_error",
+  "service": "ThreeDS",
+  "frameId": "47170f48-...",
+  "data": {
+    "refId": "88657679",
+    "message": "Payer Authentication Error - Blocked due to Failed Authentication rule",
+    "type": "generalError"
+  }
+}
+```
+
+Listening for this `_gatewayJsInternal_error` / `ThreeDS` message is enough to
+detect the failure and recover (surface an error, reset the form) instead of
+hanging.
 
 ---
 

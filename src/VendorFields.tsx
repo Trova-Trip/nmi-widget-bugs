@@ -19,6 +19,14 @@ const TOKENIZATION_KEY = import.meta.env.VITE_NMI_TOKENIZATION_KEY ?? "";
 const REQUIRED_FIELDS = ["ccnumber", "ccexp", "cvv"] as const;
 const HANG_THRESHOLD_MS = 5000;
 
+// The hang is intermittent (~1 in 30 loads), so reproducing it by hand means
+// reloading dozens of times. This automates that: reload on every successful
+// load and stop the moment a hang reproduces, leaving it on screen. State is
+// kept in sessionStorage so it survives the reloads.
+const AUTO_RETRY_KEY = "nmi-auto-retry";
+const ATTEMPT_KEY = "nmi-attempt";
+const RETRY_DELAY_MS = 500;
+
 type TimelineEntry = { t: number; label: string };
 type ThreeDSStatus = "idle" | "running" | "challenge" | "complete" | "failure";
 
@@ -50,6 +58,10 @@ function VendorFields() {
   const [threeDSStatus, setThreeDSStatus] = useState<ThreeDSStatus>("idle");
   const [threeDSResult, setThreeDSResult] =
     useState<ThreeDSecureCompleteEvent | null>(null);
+  const [autoRetry, setAutoRetry] = useState(
+    () => sessionStorage.getItem(AUTO_RETRY_KEY) === "1",
+  );
+  const attempt = Number(sessionStorage.getItem(ATTEMPT_KEY) ?? "0");
 
   const log = (label: string) => {
     const t = Math.round(performance.now() - startedAt.current);
@@ -89,6 +101,42 @@ function VendorFields() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const hung = timedOut && !fieldsAvailable;
+
+  // Auto-retry loop: once armed, reload shortly after each successful load and
+  // stop as soon as a hang reproduces, so the failed state stays on screen for
+  // inspection.
+  useEffect(() => {
+    if (!autoRetry) {
+      return;
+    }
+    if (hung) {
+      sessionStorage.removeItem(AUTO_RETRY_KEY);
+      setAutoRetry(false);
+      return;
+    }
+    if (fieldsAvailable) {
+      const timer = setTimeout(() => {
+        sessionStorage.setItem(ATTEMPT_KEY, String(attempt + 1));
+        window.location.reload();
+      }, RETRY_DELAY_MS);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRetry, fieldsAvailable, hung]);
+
+  const toggleAutoRetry = () => {
+    if (autoRetry) {
+      sessionStorage.removeItem(AUTO_RETRY_KEY);
+      setAutoRetry(false);
+      return;
+    }
+    // Start a fresh run from this load.
+    sessionStorage.setItem(AUTO_RETRY_KEY, "1");
+    sessionStorage.setItem(ATTEMPT_KEY, "1");
+    setAutoRetry(true);
+  };
 
   // --- 3DS flow, mirroring microapps NmiMakePaymentForm ---
 
@@ -133,7 +181,6 @@ function VendorFields() {
   };
 
   const missing = REQUIRED_FIELDS.filter((f) => !seenFields.has(f));
-  const hung = timedOut && !fieldsAvailable;
 
   let status: { text: string; color: string };
   if (fieldsAvailable) {
@@ -173,6 +220,27 @@ function VendorFields() {
         </div>
         <div style={{ fontSize: 13, marginTop: 6 }}>
           onFieldsAvailable: <b>{fieldsAvailable ? "fired" : "not fired"}</b>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginTop: 8,
+          }}
+        >
+          <button
+            onClick={toggleAutoRetry}
+            style={{ padding: "6px 12px", fontWeight: 600, cursor: "pointer" }}
+          >
+            {autoRetry ? "⏹ Stop auto-retry" : "🔁 Auto-retry until hang"}
+          </button>
+          {attempt > 0 && (
+            <span style={{ fontSize: 13 }}>
+              attempt <b>#{attempt}</b>
+              {autoRetry ? " — reloading until hang…" : ""}
+            </span>
+          )}
         </div>
         <details style={{ marginTop: 8, fontSize: 12 }}>
           <summary style={{ cursor: "pointer" }}>
